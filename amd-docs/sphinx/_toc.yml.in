@@ -15,7 +15,7 @@ subtrees:
 - caption: Reference
   entries:
   - url: https://verl.readthedocs.io/en/latest/start/quickstart.html
-    title: Quickstart: PPO training on GSM8K dataset (upstream)
+    title: Quickstart PPO training on GSM8K dataset (upstream)
   - url: https://verl.readthedocs.io/en/latest/hybrid_flow.html
     title: HybridFlow programming guide (upstream)
 

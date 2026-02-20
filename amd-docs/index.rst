@@ -28,6 +28,10 @@ The verl public repository is located at `https://github.com/ROCm/verl <https://
 
     * :doc:`Install verl <install/verl-install>`
 
+  .. grid-item-card:: Reference
+
+      * `Quickstart PPO training on GSM8K dataset (upstream) <https://verl.readthedocs.io/en/latest/start/quickstart.html>`__
+      * `HybridFlow programming guide (upstream) <https://verl.readthedocs.io/en/latest/hybrid_flow.html>`__
 
 To contribute to the documentation, refer to
 `Contributing to ROCm <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
