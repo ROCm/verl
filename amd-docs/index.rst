@@ -19,6 +19,9 @@ verl achieves high training and generation throughput by building on existing LL
 Its 3D-HybridEngine reduces memory use and communication overhead when switching between training 
 and inference, improving overall performance.
 
+verl is part of the `ROCm-LLMExt toolkit
+<https://rocm.docs.amd.com/projects/rocm-llmext/en/latest/>`__.
+
 The verl public repository is located at `https://github.com/ROCm/verl <https://github.com/ROCm/verl>`__.
 
 .. grid:: 2
