@@ -12,6 +12,13 @@ subtrees:
   - file: install/verl-install.rst
     title: Install verl
 
+- caption: Reference
+  entries:
+  - url: https://verl.readthedocs.io/en/latest/start/quickstart.html
+    title: Quickstart: PPO training on GSM8K dataset (upstream)
+  - url: https://verl.readthedocs.io/en/latest/hybrid_flow.html
+    title: HybridFlow programming guide (upstream)
+
 - caption: About
   entries:
   - url: https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale/README.html
