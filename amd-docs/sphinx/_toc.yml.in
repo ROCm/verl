@@ -1,0 +1,22 @@
+defaults:
+  numbered: False
+  maxdepth: 6
+root: index
+subtrees:
+- entries:
+  - file: what-is-verl.rst
+    title: What is verl?
+
+- caption: Install
+  entries:
+  - file: install/verl-install.rst
+    title: Install verl
+
+- caption: About
+  entries:
+  - url: https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale/README.html
+    title: ROCm verl blog
+  - url: https://rocm.docs.amd.com/en/latest/contribute/contributing.html
+    title: Contribute to verl
+  - file: about/license.rst
+    title: License
