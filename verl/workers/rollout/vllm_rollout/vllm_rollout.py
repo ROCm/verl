@@ -51,6 +51,21 @@ except ModuleNotFoundError:
     # https://github.com/vllm-project/vllm/commit/6a113d9aed8221a9c234535958e70e34ab6cac5b
     from vllm.v1.worker.worker_base import WorkerWrapperBase
 
+# vLLM 0.7+: WorkerWrapperBase may take vllm_config as positional-only. Patch to accept keyword
+# so both WorkerWrapperBase(vllm_config=x) and WorkerWrapperBase(x) work (e.g. in worker processes).
+# When using the (rpc_rank=..., global_rank=...) API, do not inject vllm_config.
+_orig_wb_init = WorkerWrapperBase.__init__
+
+def _worker_wrapper_base_init(self, vllm_config=None, *args, **kwargs):
+    if vllm_config is None:
+        vllm_config = kwargs.pop("vllm_config", None)
+    if vllm_config is not None:
+        _orig_wb_init(self, vllm_config, *args, **kwargs)
+    else:
+        _orig_wb_init(self, *args, **kwargs)
+
+WorkerWrapperBase.__init__ = _worker_wrapper_base_init
+
 from packaging import version as vs
 
 from verl import DataProto
@@ -175,18 +190,20 @@ class vLLMAsyncRollout(BaseRollout):
                 await self.socket.send(pickle.dumps(e))
                 break
 
-    def _init_worker(self, all_kwargs: list[dict[str, Any]]):
+    def _init_worker(self, all_kwargs: list[dict[str, Any]], rpc_rank: int = 0):
         """Initialize worker engine."""
         if not torch.distributed.is_initialized():
             initialize_global_process_group_ray()
-        all_kwargs[0]["rank"] = int(os.environ["RANK"])
+        # Each worker uses its own slot in all_kwargs (WorkerWrapperBase.init_worker uses all_kwargs[rpc_rank]).
+        kw = all_kwargs[rpc_rank]
+        kw["rank"] = int(os.environ["RANK"])
         device_name = "NPU" if is_npu_available else "GPU"
-        all_kwargs[0]["local_rank"] = (
+        kw["local_rank"] = (
             0
             if not ray_noset_visible_devices()
             else int(ray.get_runtime_context().get_accelerator_ids()[device_name][0])
         )
-        self.vllm_config = all_kwargs[0]["vllm_config"]
+        self.vllm_config = kw["vllm_config"]
         if self.lora_config:
             lora_dtype = getattr(torch, self.config.dtype)
             self.vllm_config.lora_config = LoRAConfig(lora_dtype=lora_dtype, **self.lora_config)
@@ -202,7 +219,8 @@ class vLLMAsyncRollout(BaseRollout):
                 # Will remove the patch after vllm support on-the-fly quant for rollout natively.
                 apply_vllm_fp8_patches()
 
-        self.inference_engine = WorkerWrapperBase(vllm_config=self.vllm_config)
+        # vLLM WorkerWrapperBase expects (rpc_rank, global_rank); config is passed via init_worker(all_kwargs).
+        self.inference_engine = WorkerWrapperBase(rpc_rank=rpc_rank)
         self.inference_engine.init_worker(all_kwargs)
 
     def _load_model(self, *args, **kwargs):

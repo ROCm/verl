@@ -43,6 +43,26 @@ from vllm.v1.engine.core import EngineCoreProc
 from vllm.v1.engine.utils import CoreEngineProcManager
 from vllm.v1.executor.abstract import Executor
 
+# vLLM 0.7+: WorkerWrapperBase may take vllm_config as positional-only. Patch to accept keyword.
+# When using the (rpc_rank=..., global_rank=...) API, do not inject vllm_config.
+try:
+    from vllm.v1.worker import worker_base as _v1_worker_base
+    _WorkerWrapperBase = getattr(_v1_worker_base, "WorkerWrapperBase", None)
+    if _WorkerWrapperBase is not None:
+        _orig_wb_init = _WorkerWrapperBase.__init__
+
+        def _worker_wrapper_base_init(self, vllm_config=None, *args, **kwargs):
+            if vllm_config is None:
+                vllm_config = kwargs.pop("vllm_config", None)
+            if vllm_config is not None:
+                _orig_wb_init(self, vllm_config, *args, **kwargs)
+            else:
+                _orig_wb_init(self, *args, **kwargs)
+
+        _WorkerWrapperBase.__init__ = _worker_wrapper_base_init
+except Exception:
+    pass
+
 from verl.single_controller.ray import RayClassWithInitArgs
 from verl.utils.config import omega_conf_to_dataclass
 from verl.utils.vllm.vllm_fp8_utils import apply_vllm_fp8_patches
@@ -82,6 +102,12 @@ class ExternalZeroMQDistributedExecutor(Executor):
 
     uses_ray: bool = False
 
+    def __init__(self, vllm_config=None, *args, **kwargs):
+        # vLLM 0.7+ may pass vllm_config as keyword; base Executor expects positional.
+        if vllm_config is None:
+            vllm_config = kwargs.pop("vllm_config", None)
+        super().__init__(vllm_config, *args, **kwargs)
+
     def _init_executor(self) -> None:
         dp_rank_local = self.vllm_config.parallel_config.data_parallel_rank_local
         tp_size = self.vllm_config.parallel_config.tensor_parallel_size
@@ -97,14 +123,21 @@ class ExternalZeroMQDistributedExecutor(Executor):
             socket.connect(address)
             self.sockets.append(socket)
 
-        kwargs = dict(
-            vllm_config=self.vllm_config,
-            local_rank=None,
-            rank=None,
-            distributed_init_method="env://",
-            is_driver_worker=True,
-        )
-        self.collective_rpc("init_worker", args=([kwargs],))
+        # Build one kwargs dict per TP rank; WorkerWrapperBase.init_worker expects
+        # all_kwargs[self.rpc_rank] and each worker must be created with its rpc_rank.
+        base_rank = dp_rank_local * tp_size
+        kwargs_list = [
+            dict(
+                vllm_config=self.vllm_config,
+                local_rank=None,
+                rank=base_rank + i,
+                distributed_init_method="env://",
+                is_driver_worker=True,
+            )
+            for i in range(tp_size)
+        ]
+        # Send (kwargs_list, rpc_rank) so each rollout worker knows its index.
+        self._collective_rpc_init_worker(kwargs_list)
         self.collective_rpc("init_device")
         self.collective_rpc("load_model")
 
@@ -131,6 +164,21 @@ class ExternalZeroMQDistributedExecutor(Executor):
                 f.set_result(result)
                 return f
             return result
+
+    def _collective_rpc_init_worker(self, kwargs_list: list[dict[str, Any]]) -> list[Any]:
+        """Send init_worker with (kwargs_list, rpc_rank) per socket so each worker gets its rank."""
+        sent_method = "init_worker"
+        outputs = []
+        for i, socket in enumerate(self.sockets):
+            args = (kwargs_list, i)
+            message = pickle.dumps((sent_method, args, {}))
+            socket.send(message, zmq.DONTWAIT)
+        for socket in self.sockets:
+            outputs.append(pickle.loads(socket.recv()))
+        for output in outputs:
+            if isinstance(output, Exception):
+                raise output
+        return outputs
 
     def collective_rpc(
         self,

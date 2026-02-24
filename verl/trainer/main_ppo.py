@@ -63,6 +63,10 @@ def run_ppo(config, task_runner_class=None) -> None:
         # `num_cpus` specifies the number of CPU cores Ray can use, obtained from the configuration
         default_runtime_env = get_ppo_ray_runtime_env()
         ray_init_kwargs = config.ray_kwargs.get("ray_init", {})
+        # If no address is set, use "local" so Ray starts a new local cluster instead of
+        # connecting to RAY_ADDRESS or /tmp/ray/ray_current_cluster (e.g. from a previous run).
+        if ray_init_kwargs.get("address") is None:
+            ray_init_kwargs = OmegaConf.create({**dict(ray_init_kwargs), "address": "local"})
         runtime_env_kwargs = ray_init_kwargs.get("runtime_env", {})
 
         if config.transfer_queue.enable:
