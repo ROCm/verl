@@ -31,11 +31,6 @@ PPO_RAY_RUNTIME_ENV = {
         # https://docs.vllm.ai/en/latest/usage/troubleshooting.html?h=nccl_cumem_enable#known-issues
         # https://github.com/vllm-project/vllm/blob/c6b0a7d3ba03ca414be1174e9bd86a97191b7090/vllm/worker/worker_base.py#L445
         "NCCL_CUMEM_ENABLE": "0",
-        # On ROCm, TaskRunner is created with num_gpus=0 but imports vLLM (which touches
-        # torch.cuda at import time). Prevent Ray from clearing HIP/CUDA visibility so
-        # that the TaskRunner process inherits the node's GPUs and the import succeeds.
-        "RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES": "1",
-        "RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES": "1",
     },
 }
 
