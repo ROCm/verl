@@ -14,7 +14,7 @@ subtrees:
 
 - caption: Examples
   entries:
-  - file: install/verl-examples.rst
+  - file: examples/verl-examples.rst
     title: Run a verl example
 
 - caption: Reference
