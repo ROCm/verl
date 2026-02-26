@@ -119,9 +119,3 @@ Once connected to the Docker container, verify that verl is installed:
 
    pip list | grep verl
    verl    0.3.0.post0        /app
-
-Run a verl example
-====================================================================
-
-The ``/app/examples`` directory contains examples for using verl with ROCm. 
-These examples are described in the `Reinforcement Learning from Human Feedback on AMD GPUs with verl and ROCm Integration <https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale/README.html>`__ blog.

@@ -12,6 +12,11 @@ subtrees:
   - file: install/verl-install.rst
     title: Install verl
 
+- caption: Examples
+  entries:
+  - file: install/verl-examples.rst
+    title: Run a verl example
+
 - caption: Reference
   entries:
   - url: https://verl.readthedocs.io/en/latest/start/quickstart.html
@@ -21,7 +26,7 @@ subtrees:
 
 - caption: About
   entries:
-  - url: https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale/README.html
+  - url: https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale-rocm7/README.html
     title: ROCm verl blog
   - url: https://rocm.docs.amd.com/en/latest/contribute/contributing.html
     title: Contribute to verl
