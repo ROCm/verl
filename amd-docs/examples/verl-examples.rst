@@ -13,7 +13,7 @@ It covers data preparation, model loading checks, configuration,
 environment variables, running PPO and GRPO, and launching multi-node
 training with Slurm.
 
-1. Prepare the GSM8K dataset using the provided preprocessing script.
+1. Prepare the GSM8K dataset using the provided preprocessing script from the examples directory at `https://github.com/verl-project/verl/tree/main/examples/data_preprocess <https://github.com/verl-project/verl/tree/main/examples/data_preprocess>`__.
 
    .. code-block:: bash
 
@@ -45,7 +45,7 @@ training with Slurm.
 5. Run PPO by defining the parameters and launching training.
 
    .. note::
-      If you use deepseek-ai/deepseek-llm-7b-chat, set TP_VALUE=4, INFERENCE_BATCH_SIZE=32, and GPU_MEMORY_UTILIZATION=0.4.
+      If you use ``deepseek-ai/deepseek-llm-7b-chat``, set ``TP_VALUE=4``, ``INFERENCE_BATCH_SIZE=32``, and ``GPU_MEMORY_UTILIZATION=0.4``.
 
    .. code-block:: bash
 
@@ -95,7 +95,7 @@ training with Slurm.
 6. Run GRPO by setting the advantage estimator and launching training.
 
    .. note::
-      If you use deepseek-ai/deepseek-llm-7b-chat, set TP_VALUE=2, INFERENCE_BATCH_SIZE=110, and GPU_MEMORY_UTILIZATION=0.6.
+      If you use ``deepseek-ai/deepseek-llm-7b-chat``, set ``TP_VALUE=2``, ``INFERENCE_BATCH_SIZE=110``, and ``GPU_MEMORY_UTILIZATION=0.6``.
 
    .. code-block:: bash
 
