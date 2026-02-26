@@ -960,7 +960,10 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             self.ref_policy = DataParallelPPOActor(config=self.config.ref, actor_module=self.ref_module_fsdp)
 
         if self._is_actor:
-            self.flops_counter = FlopsCounter(self.actor_model_config)
+            self.flops_counter = FlopsCounter(
+                self.actor_model_config,
+                use_torch_compile=getattr(self.config.actor, "use_torch_compile", None),
+            )
             self.checkpoint_manager = FSDPCheckpointManager(
                 model=self.actor_module_fsdp,
                 optimizer=self.actor.actor_optimizer,

@@ -185,6 +185,9 @@ class RolloutConfig(BaseConfig):
     log_prob_use_dynamic_bsz: bool = False
     log_prob_max_token_len_per_gpu: int = 16384
 
+    # From actor_rollout_ref.actor.use_torch_compile. When False (e.g. ROCm), rollout disables expandable_segments.
+    use_torch_compile: bool = True
+
     disable_log_stats: bool = True
 
     multi_stage_wake_up: bool = False

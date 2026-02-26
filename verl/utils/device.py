@@ -298,14 +298,20 @@ def check_ipc_version_support(software_version: str, cann_version: str) -> bool:
 def is_support_ipc() -> bool:
     """Check if the device supports IPC (Inter-Process Communication).
 
-    For GPU devices, always returns True.
+    For CUDA GPU devices, returns True.
+    For ROCm/HIP, returns False (HIP cross-process shared memory fails with
+    hipErrorInvalidValue when rebuilding from IPC handle in worker processes).
     For NPU devices, checks the software version and CANN toolkit version
     to determine if IPC is supported.
 
     Returns:
         bool: True if IPC is supported, False otherwise.
     """
-    # If CUDA is available, it's a GPU device
+    # ROCm/HIP: CUDA-style IPC (_new_shared_cuda) fails in vLLM workers with
+    # "HIP error: invalid argument". Use shared-memory weight transfer instead.
+    if is_cuda_available and getattr(torch.version, "hip", None):
+        return False
+    # If CUDA is available (and not ROCm), it's a GPU device with working IPC
     if is_cuda_available:
         return True
 

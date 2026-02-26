@@ -23,6 +23,9 @@ _DEVICE_FLOPS = {
     "CPU": 448e9,
     "GB200": 2.5e15,
     "B200": 2.25e15,
+    "MI455X": 10e15,  # AMD Instinct MI455X FP16 (10 PFLOPS, CDNA 5)
+    "MI425X": 6e15,  # AMD Instinct MI425X FP16 (estimated, MI400 series)
+    "MI355X": 2516e12,  # AMD Instinct MI355X FP16 matrix (2.516 PFLOPS)
     "MI300X": 1336e12,
     "H100": 989e12,
     "H800": 989e12,
@@ -40,7 +43,7 @@ _DEVICE_FLOPS = {
 }
 
 
-def get_device_flops(unit="T", device_name=None):
+def get_device_flops(unit="T", device_name=None, use_torch_compile=None):
     """Get the theoretical FLOPS (Floating Point Operations Per Second) capacity of the current device.
 
     Args:
@@ -51,6 +54,9 @@ def get_device_flops(unit="T", device_name=None):
             "G" - Giga (1e9)
             "T" - Tera (1e12, default)
             "P" - Peta (1e15)
+        device_name: For testing only; when set, skip device lookup.
+        use_torch_compile: When device lookup fails, use ROCm device fallback (MI355X) only if this is False
+            (actor_rollout_ref.actor.use_torch_compile).
 
     Returns:
         float: The theoretical FLOPS capacity of the current device in the specified unit.
@@ -73,7 +79,15 @@ def get_device_flops(unit="T", device_name=None):
         if device == torch.cpu:
             device_name = "CPU"
         else:
-            device_name = get_torch_device().get_device_name()
+            try:
+                device_name = get_torch_device().get_device_name()
+            except (AssertionError, RuntimeError):
+                # ROCm or other backends can raise "Invalid device id" from get_device_properties.
+                # When actor_rollout_ref.actor.use_torch_compile=False (ROCm), use default ROCm device for FLOPs.
+                if use_torch_compile is False:
+                    device_name = "MI355X"
+                else:
+                    device_name = "Unknown"
 
     flops = float("inf")  # INF flops for unkown gpu type
 
@@ -568,7 +582,7 @@ class FlopsCounter:
 
     """
 
-    def __init__(self, config: PretrainedConfig):
+    def __init__(self, config: PretrainedConfig, use_torch_compile=None):
         VALID_CONFIG_TYPE = ESTIMATE_FUNC.keys()
         if config.model_type not in VALID_CONFIG_TYPE:
             print(
@@ -577,6 +591,7 @@ class FlopsCounter:
             )
 
         self.config = config
+        self.use_torch_compile = use_torch_compile
 
     # TODO: actually we can make this a static method
     def estimate_flops(self, batch_seqlens, delta_time, **kargs):
@@ -599,5 +614,5 @@ class FlopsCounter:
             estimated_flops = func(self.config, tokens_sum, batch_seqlens, delta_time, **kargs)
         else:
             estimated_flops = func(self.config, tokens_sum, batch_seqlens, delta_time)
-        promised_flops = get_device_flops()
+        promised_flops = get_device_flops(use_torch_compile=self.use_torch_compile)
         return estimated_flops, promised_flops

@@ -56,4 +56,11 @@ def get_ppo_ray_runtime_env():
     for key in list(runtime_env["env_vars"].keys()):
         if os.environ.get(key) is not None:
             runtime_env["env_vars"].pop(key, None)
+
+    if os.environ.get("VERL_USE_HIP_VISIBLE_DEVICES") and os.environ.get("HIP_VISIBLE_DEVICES"):
+        runtime_env["env_vars"]["RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES"] = "1"
+        runtime_env["env_vars"]["RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES"] = "1"
+        runtime_env["env_vars"]["VERL_USE_HIP_VISIBLE_DEVICES"] = os.environ["VERL_USE_HIP_VISIBLE_DEVICES"]
+        runtime_env["env_vars"]["HIP_VISIBLE_DEVICES"] = os.environ["HIP_VISIBLE_DEVICES"]
+
     return runtime_env

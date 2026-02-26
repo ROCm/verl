@@ -642,7 +642,10 @@ class ActorRolloutRefWorker(MegatronWorker, DistProfilerExtension):
                 log_gpu_memory_usage("After offload ref params during init", logger=logger)
 
         if self._is_actor:
-            self.flops_counter = FlopsCounter(self.actor_model_config)
+            self.flops_counter = FlopsCounter(
+                self.actor_model_config,
+                use_torch_compile=getattr(self.config.actor, "use_torch_compile", None),
+            )
             self.checkpoint_mananager = MegatronCheckpointManager(
                 config=self.config,
                 checkpoint_config=self.config.actor.checkpoint,
