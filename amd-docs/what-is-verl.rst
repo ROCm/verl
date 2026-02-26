@@ -9,10 +9,10 @@ What is verl?
 ********************************************************************
 
 `verl <https://verl.readthedocs.io/en/latest/>`__ is a reinforcement
-learning training framework designed for post-training large language
+learning training library designed for post-training large language
 models. It provides a flexible and scalable system for implementing
 reinforcement learning from human feedback and other reinforcement
-learning–based optimization workflows. The framework is built to
+learning–based optimization workflows. The library is built to
 integrate with modern language model training and inference stacks
 while prioritizing performance, modularity, and ease of use.
 

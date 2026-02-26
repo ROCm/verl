@@ -12,6 +12,11 @@ subtrees:
   - file: install/verl-install.rst
     title: Install verl
 
+- caption: Examples
+  entries:
+  - file: examples/verl-examples.rst
+    title: Run a verl example
+
 - caption: Reference
   entries:
   - url: https://verl.readthedocs.io/en/latest/start/quickstart.html

@@ -5,11 +5,14 @@
 .. _verl-documentation-index:
 
 ********************************************************************
-verl documentation
+verl on ROCm documentation
 ********************************************************************
 
+Use verl on ROCm to train reinforcement learning loops for LLMs on AMD Instinct GPUs,
+enabling efficient, scalable policy optimization for production copilots and autonomous agents.
+
 Volcano Engine Reinforcement Learning for LLMs (`verl <https://verl.readthedocs.io/en/latest/>`__)  
-is a reinforcement learning framework designed for large language models (LLMs). 
+is a reinforcement learning library designed for large language models (LLMs). 
 verl offers a scalable, open-source fine-tuning solution by using a hybrid programming model 
 that makes it easy to define and run complex post-training dataflows efficiently. 
 
@@ -20,7 +23,7 @@ Its 3D-HybridEngine reduces memory use and communication overhead when switching
 and inference, improving overall performance.
 
 verl is part of the `ROCm-LLMExt toolkit
-<https://rocm.docs.amd.com/projects/rocm-llmext/en/latest/>`__.
+<https://rocm.docs.amd.com/projects/rocm-llm-ext/en/docs-25.08>`__.
 
 The verl public repository is located at `https://github.com/ROCm/verl <https://github.com/ROCm/verl>`__.
 
@@ -30,6 +33,10 @@ The verl public repository is located at `https://github.com/ROCm/verl <https://
   .. grid-item-card:: Install
 
     * :doc:`Install verl <install/verl-install>`
+
+  .. grid-item-card:: Examples
+
+    * :doc:`Run a verl example <examples/verl-examples>`
 
   .. grid-item-card:: Reference
 
