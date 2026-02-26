@@ -28,7 +28,7 @@ subtrees:
   entries:
   - url: https://rocm.blogs.amd.com/artificial-intelligence/verl-large-scale-rocm7/README.html
     title: ROCm verl blog
-  - url: https://rocm.docs.amd.com/en/latest/contribute/contributing.html
+  - url: https://github.com/ROCm/verl/blob/main/CONTRIBUTING.md
     title: Contribute to verl
   - file: about/license.rst
     title: License
