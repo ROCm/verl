@@ -42,7 +42,30 @@ def is_torch_npu_available(check_device=True) -> bool:
     except ImportError:
         return False
 
+def is_torch_rocm_available(check_device=True) -> bool:
+    """Check if ROCm is available for PyTorch operations.
 
+    Attempts to detect ROCm availability by checking for the torch version
+    and its is_available() function.
+
+    Args:
+        check_device : only check torch version for hip or strictly check if ROCm device is available
+
+    Returns:
+        bool: True if torch for ROCm is available, False otherwise.
+    """
+    try:
+        if getattr(torch.version, "hip", None) is None:
+            return False
+
+        if check_device:
+            return torch.cuda.is_available()
+        else:
+            return True
+    except ImportError:
+        return False
+
+is_rocm_available = torch.cuda.is_available() && torch.version.hip is not None
 is_cuda_available = torch.cuda.is_available()
 is_npu_available = is_torch_npu_available()
 
@@ -65,7 +88,11 @@ def get_visible_devices_keyword() -> str:
         str: 'CUDA_VISIBLE_DEVICES' if CUDA is available,
             'ASCEND_RT_VISIBLE_DEVICES' otherwise.
     """
-    return "CUDA_VISIBLE_DEVICES" if not is_torch_npu_available(check_device=False) else "ASCEND_RT_VISIBLE_DEVICES"
+    return (
+        "ASCEND_RT_VISIBLE_DEVICES" if is_torch_npu_available(check_device=False)
+        else "HIP_VISIBLE_DEVICES" if is_torch_rocm_available(check_device=False)
+        else "CUDA_VISIBLE_DEVICES"
+    )
 
 
 def get_device_name() -> str:
