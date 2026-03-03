@@ -65,7 +65,7 @@ def is_torch_rocm_available(check_device=True) -> bool:
     except ImportError:
         return False
 
-is_rocm_available = torch.cuda.is_available() && torch.version.hip is not None
+is_rocm_available = torch.cuda.is_available() and torch.version.hip is not None
 is_cuda_available = torch.cuda.is_available()
 is_npu_available = is_torch_npu_available()
 

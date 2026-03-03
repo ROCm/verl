@@ -19,13 +19,16 @@ from dataclasses import dataclass
 from typing import AsyncGenerator, Generator
 from unittest.mock import patch
 
-with patch("importlib.metadata.distributions", return_value=[]):
-    import cupy as cp
-
 import ray
 import ray.util.collective as collective
 import torch
 import zmq
+
+if torch.version.hip is not None:
+    import cupy as cp
+else:
+    with patch("importlib.metadata.distributions", return_value=[]):
+        import cupy as cp
 
 from verl.checkpoint_engine.base import CheckpointEngine, CheckpointEngineRegistry, TensorMeta
 from verl.utils.net_utils import get_free_port, is_valid_ipv6_address
