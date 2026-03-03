@@ -13,12 +13,12 @@ System requirements
 
 To use verl `0.3.0.post0 <https://github.com/verl-project/verl/releases/tag/v0.3.0.post0>`__, you need the following prerequisites:
 
-- **ROCm version:** `6.2.0 <https://repo.radeon.com/rocm/apt/6.2/>`__
+- **ROCm version:** `6.2.0 <https://rocm.docs.amd.com/en/docs-6.2.0/>`__
 - **Operating system:** Ubuntu 20.04
 - **GPU platform:** AMD Instinct™ MI300X
 - **PyTorch:** `2.5.0 <https://github.com/ROCm/pytorch/tree/release/2.5>`__
 - **Python:** `3.9 <https://www.python.org/downloads/release/python-3919/>`__
-- **vLLm:** `0.6.3 <https://github.com/vllm-project/vllm/releases/tag/v0.6.3>`__
+- **vLLM:** `0.6.3 <https://github.com/vllm-project/vllm/releases/tag/v0.6.3>`__
 
 Install verl
 ================================================================================
@@ -36,7 +36,7 @@ Use a prebuilt Docker image with verl pre-installed
 The recommended way to set up a verl environment and avoid potential installation issues is with Docker. 
 The tested, prebuilt image includes verl, PyTorch, ROCm, and other dependencies.
 
-Prebuilt Docker images with verl configured for ROCm 6.2.0 are available on `Docker Hub <https://hub.docker.com/r/rocm/verl/tags>`_.
+Prebuilt Docker images with verl configured for ROCm are available on `Docker Hub <https://hub.docker.com/r/rocm/verl/tags>`_.
 
 1. Pull the Docker image
 
