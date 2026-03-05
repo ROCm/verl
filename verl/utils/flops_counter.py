@@ -43,7 +43,7 @@ _DEVICE_FLOPS = {
 }
 
 
-def get_device_flops(unit="T", device_name=None, use_torch_compile=None):
+def get_device_flops(unit="T", device_name=None):
     """Get the theoretical FLOPS (Floating Point Operations Per Second) capacity of the current device.
 
     Args:
@@ -54,9 +54,6 @@ def get_device_flops(unit="T", device_name=None, use_torch_compile=None):
             "G" - Giga (1e9)
             "T" - Tera (1e12, default)
             "P" - Peta (1e15)
-        device_name: For testing only; when set, skip device lookup.
-        use_torch_compile: When device lookup fails, use ROCm device fallback (MI355X) only if this is False
-            (actor_rollout_ref.actor.use_torch_compile).
 
     Returns:
         float: The theoretical FLOPS capacity of the current device in the specified unit.
@@ -83,11 +80,8 @@ def get_device_flops(unit="T", device_name=None, use_torch_compile=None):
                 device_name = get_torch_device().get_device_name()
             except (AssertionError, RuntimeError):
                 # ROCm or other backends can raise "Invalid device id" from get_device_properties.
-                # When actor_rollout_ref.actor.use_torch_compile=False (ROCm), use default ROCm device for FLOPs.
-                if use_torch_compile is False:
-                    device_name = "MI355X"
-                else:
-                    device_name = "Unknown"
+                # Use default ROCm device for FLOPs.
+                device_name = "MI355X"
 
     flops = float("inf")  # INF flops for unkown gpu type
 
@@ -582,7 +576,7 @@ class FlopsCounter:
 
     """
 
-    def __init__(self, config: PretrainedConfig, use_torch_compile=None):
+    def __init__(self, config: PretrainedConfig):
         VALID_CONFIG_TYPE = ESTIMATE_FUNC.keys()
         if config.model_type not in VALID_CONFIG_TYPE:
             print(
@@ -591,7 +585,6 @@ class FlopsCounter:
             )
 
         self.config = config
-        self.use_torch_compile = use_torch_compile
 
     # TODO: actually we can make this a static method
     def estimate_flops(self, batch_seqlens, delta_time, **kargs):
@@ -614,5 +607,5 @@ class FlopsCounter:
             estimated_flops = func(self.config, tokens_sum, batch_seqlens, delta_time, **kargs)
         else:
             estimated_flops = func(self.config, tokens_sum, batch_seqlens, delta_time)
-        promised_flops = get_device_flops(use_torch_compile=self.use_torch_compile)
+        promised_flops = get_device_flops()
         return estimated_flops, promised_flops

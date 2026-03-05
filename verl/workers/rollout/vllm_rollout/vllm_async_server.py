@@ -243,10 +243,7 @@ class vLLMHttpServer:
         if not self.config.enable_sleep_mode:
             from verl.utils.device import set_expandable_segments
 
-            # vLLM's CuMemAllocator (memory pool) requires expandable_segments=False.
-            # When actor_rollout_ref.actor.use_torch_compile=False (e.g. ROCm), expandable segments
-            # are not supported and would trigger "Expandable segments are not compatible with memory pool".
-            set_expandable_segments(self.config.use_torch_compile)
+            set_expandable_segments(True)
 
         quantization = self.config.quantization
         hf_overrides = {}
