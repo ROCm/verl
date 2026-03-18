@@ -205,7 +205,9 @@ class vLLMHttpServer:
         if self.config.get("limit_images", None):  # support for multi-image data
             engine_kwargs["limit_mm_per_prompt"] = {"image": self.config.get("limit_images")}
         if self.config.cudagraph_capture_sizes:
-            engine_kwargs["cuda_graph_sizes"] = self.config.cudagraph_capture_sizes
+            #engine_kwargs["cuda_graph_sizes"] = self.config.cudagraph_capture_sizes
+            #TODO: vtsang check vllm version
+            engine_kwargs["cudagraph_capture_sizes"] = self.config.cudagraph_capture_sizes
 
         self._preprocess_engine_kwargs(engine_kwargs)
 
