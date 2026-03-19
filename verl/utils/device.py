@@ -104,7 +104,7 @@ def get_device_name() -> str:
     Returns:
         str: Device type string ('cuda', 'npu', or 'cpu').
     """
-    if is_cuda_available:
+    if is_cuda_available or is_rocm_available:
         device = "cuda"
     elif is_npu_available:
         device = "npu"
