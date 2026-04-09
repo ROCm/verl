@@ -2,7 +2,7 @@
 
 ## DAPO 介绍
 
-Last updated: 01/27/2026.
+Last updated: 03/04/2026.
 
 DAPO的论文可以参考：[DAPO](https://arxiv.org/pdf/2503.14476)，其中包含以下几个关键技术。
 
@@ -60,20 +60,20 @@ reward_model.overlong_buffer.penalty_factor=${overlong_penalty_factor}   #惩罚
 
 ## 硬件要求
 
-当前支持Atlas 800T A3 与 Atlas 900 A3 SuperPoD。完成跑完本次最佳实践需要 2台Atlas 800T A3。关键软件版本可以参考：[Ascend Quickstart](https://github.com/volcengine/verl/blob/main/docs/ascend_tutorial/ascend_quick_start.rst)
+当前支持Atlas 800T A3 与 Atlas 900 A3 SuperPoD。完成跑完本次最佳实践需要 2台Atlas 800T A3。关键软件版本可以参考：[Ascend Quickstart](https://github.com/volcengine/verl/blob/main/docs/ascend_tutorial/quick_start/ascend_quick_start.rst)
 
 ## 安装基础环境
 
-| software | version|
-| --- | --- |
-| Python| >= 3.10, <3.12 |
-| CANN | == 8.3.RC1 |
-| torch | == 2.7.1 |
-| torch_npu | == 2.7.1 |
-| verl | main分支 commitId=252d76908b903ad8fb6969eb3a5e5f873c95ea2b |
-| vllm | 	v0.11.0 |
-| vllm-ascend | v0.11.0-dev|
-| transformers | 	4.57.3|
+| software     | version                                                    |
+| ------------ | ---------------------------------------------------------- |
+| Python       | >=3.10, <3.12                                              |
+| CANN         | ==8.3.RC1                                                  |
+| torch        | ==2.7.1                                                    |
+| torch_npu    | ==2.7.1                                                    |
+| verl         | main分支 commitId=252d76908b903ad8fb6969eb3a5e5f873c95ea2b |
+| vllm         | v0.11.0                                                    |
+| vllm-ascend  | v0.11.0-dev                                                |
+| transformers | 4.57.3                                                     |
 
 在本实践中, 我们通过指定 verl 的commit id 以避免引入其他问题
 ```
@@ -91,7 +91,7 @@ git checkout main
 
 Geometry3k 数据集是由加利福尼亚大学洛杉矶分校与浙江大学联合研发的几何领域专用数据集，核心面向视觉问答（VQA）任务展开研究与模型训练。该数据集总计包含 3002 个样本，采用图像和文本两种模态数据形式构建，其中文本模态涵盖各类几何问题描述，图像则以可视化图表呈现问题中的几何图形信息，包括三角形、圆形、四边形等基础几何形状，以及不同图形间的位置、嵌套、相交等关联关系。可以从Hugging Face库下载对应的原始数据集：[Geometry3k ](https://huggingface.co/datasets/hiyouga/geometry3k)
 
-```python
+```shell
 # 下载原始数据并预处理
 python ./examples/data_preprocess/geo3k.py --local_dir=./data/geo3k
 ```
@@ -124,7 +124,7 @@ export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2
 
 #### OpenEuler 操作系统
 
-执行如下命令重操作系统源安装jemalloc
+执行如下命令通过操作系统源安装jemalloc
 
 ```shell
 yum install jemalloc
@@ -191,7 +191,7 @@ trainer.save_freq=-1
 对于单机任务 Qwen3-VL-30B , 修改脚本中参数`trainer.nnodes`为 1， `trainer.n_gpus_per_node` 为16，然后直接bash执行verl仓上示例脚本
 
 ```
-bash recipe/dapo/run dapo_qwen3_vl_30b_fsdp2_npu.sh
+bash recipe/dapo/run_dapo_qwen3_vl_30b_fsdp2_npu.sh
 ```
 对于多节点任务 Qwen3-VL-30B ，我们推荐使用以下脚本进行大规模多节点训练拉起
 

@@ -133,6 +133,12 @@ class FSDPEngine(BaseEngine):
         self._is_offload_optimizer = self.engine_config.optimizer_offload
         self._is_lora = self.model_config.lora_rank > 0
 
+        # QAT (Quantization-Aware Training)
+        self._qat_config = getattr(self.engine_config, "qat", None)
+        self._qat_enabled = self._qat_config is not None and getattr(self._qat_config, "enable", False)
+        if self._qat_enabled:
+            logger.info(f"QAT enabled: mode={self._qat_config.mode}, group_size={self._qat_config.group_size}")
+
         if self.engine_config.entropy_from_logits_with_chunking:
             entropy_from_logits = verl_F.entropy_from_logits_with_chunking
         else:
@@ -225,21 +231,42 @@ class FSDPEngine(BaseEngine):
         with init_context(), warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
-            auto_class = get_hf_auto_model_class(hf_config=self.model_config.hf_config)
+            if self.model_config.model_type == "language_model":
+                auto_class = get_hf_auto_model_class(hf_config=self.model_config.hf_config)
 
-            module = auto_class.from_pretrained(
-                pretrained_model_name_or_path=self.model_config.local_path,
-                torch_dtype=torch_dtype,
-                config=self.model_config.hf_config,
-                trust_remote_code=self.model_config.trust_remote_code,
-            )
+                module = auto_class.from_pretrained(
+                    pretrained_model_name_or_path=self.model_config.local_path,
+                    torch_dtype=torch_dtype,
+                    config=self.model_config.hf_config,
+                    trust_remote_code=self.model_config.trust_remote_code,
+                )
+            else:
+                from verl.utils.model import load_valuehead_model
+
+                assert self.model_config.model_type == "value_model", (
+                    f"Unsupported model type: {self.model_config.model_type}"
+                )
+                self.model_config.hf_config.num_labels = 1
+                self.model_config.hf_config.classifier_dropout = 0.0
+                self.model_config.hf_config.hidden_dropout = "0"
+                self.model_config.hf_config.summary_dropout_prob = 0.0
+                module = load_valuehead_model(
+                    local_path=self.model_config.local_path,
+                    torch_dtype=torch_dtype,
+                    model_config=self.model_config.hf_config,
+                    trust_remote_code=self.model_config.trust_remote_code,
+                )
 
             use_liger = self.model_config.use_liger
-            # Apply Liger kernel to the model if use_liger is set to True
+            # Apply Liger kernel; disable fused_linear_cross_entropy (conflicts with verl's forward patching)
             if use_liger:
                 from liger_kernel.transformers.monkey_patch import _apply_liger_kernel_to_instance
 
-                _apply_liger_kernel_to_instance(model=module)
+                _apply_liger_kernel_to_instance(
+                    model=module,
+                    fused_linear_cross_entropy=False,
+                    swiglu=True,
+                )
 
             fused_kernel_options = self.model_config.fused_kernel_options
             fused_kernels_backend = (
@@ -435,6 +462,58 @@ class FSDPEngine(BaseEngine):
             raise NotImplementedError(f"LR scheduler type {lr_scheduler_type} is not supported")
         return lr_scheduler
 
+    def _apply_qat(self, module):
+        """Apply QAT transformations to the model before FSDP wrapping."""
+        from verl.utils.qat.core import apply_qat, enable_qat_fuse
+
+        module = apply_qat(
+            module,
+            {
+                "enable": self._qat_config.enable,
+                "mode": self._qat_config.mode,
+                "group_size": self._qat_config.group_size,
+                "ignore_patterns": list(self._qat_config.ignore_patterns),
+                "activation_observer": self._qat_config.activation_observer,
+            },
+        )
+        enable_qat_fuse(module)
+
+        if self._qat_config.mode == "w4a4":
+            self._restore_w4a4_input_scales(module, self.model_config.local_path)
+
+        return module
+
+    def _restore_w4a4_input_scales(self, model, model_path):
+        """Restore input_global_scale and input_amax from checkpoint for W4A4 mode."""
+        import glob
+
+        from safetensors import safe_open
+
+        safetensor_files = glob.glob(f"{model_path}/model*.safetensors")
+        loaded_count = 0
+
+        for sf_path in safetensor_files:
+            with safe_open(sf_path, framework="pt") as f:
+                for key in f.keys():
+                    if "input_global_scale" in key:
+                        module_path = key.replace(".input_global_scale", "")
+                        amax_key = f"{module_path}.input_amax"
+
+                        module = model
+                        for part in module_path.split("."):
+                            module = module[int(part)] if part.isdigit() else getattr(module, part)
+
+                        scale_val = f.get_tensor(key)
+                        val = scale_val.item() if scale_val.numel() == 1 else scale_val.max().item()
+                        module.input_global_scale.fill_(val)
+
+                        amax_val = f.get_tensor(amax_key)
+                        amax = amax_val.item() if amax_val.numel() == 1 else amax_val.max().item()
+                        module.input_amax.fill_(amax)
+                        loaded_count += 1
+
+        logger.info(f"[QAT W4A4] Restored {loaded_count} input_global_scale/input_amax from {model_path}")
+
     def _build_model_optimizer(self):
         from verl.utils.model import print_model_size
 
@@ -443,6 +522,10 @@ class FSDPEngine(BaseEngine):
         # Apply LoRA adapters if low-rank adaptation is enabled
         if self._is_lora:
             module = self._build_lora_module(module)
+
+        # Apply QAT before FSDP wrapping (training only)
+        if self._qat_enabled and not self.engine_config.forward_only:
+            module = self._apply_qat(module)
 
         # Synchronize all distributed processes before proceeding
         torch.distributed.barrier()
@@ -498,6 +581,12 @@ class FSDPEngine(BaseEngine):
             return self.ulysses_device_mesh.get_group(mesh_dim="dp")
         else:
             return torch.distributed.group.WORLD
+
+    def get_model_parallel_group(self):
+        raise NotImplementedError
+
+    def get_context_parallel_group(self):
+        raise NotImplementedError
 
     def forward_backward_batch(self, data: TensorDict, loss_function: Callable, forward_only=False) -> list[TensorDict]:
         # note that the global_batch_size should include data on all the dp
@@ -567,6 +656,12 @@ class FSDPEngine(BaseEngine):
             self.optimizer.zero_grad()
         else:
             self.optimizer.step()
+
+        if self._qat_enabled:
+            from verl.utils.qat.core import invalidate_all_scales
+
+            invalidate_all_scales(self.module)
+
         return grad_norm.item()
 
     def lr_scheduler_step(self):
@@ -699,8 +794,29 @@ class FSDPEngine(BaseEngine):
                 )
                 for name, param in params.items()
             )
-        # return per_tensor_param, peft_config
-        # Convert peft_config to dict for vLLM compatibility (PEFTHelper.from_dict expects dict)
+
+        if self._qat_enabled:
+            from verl.utils.qat.quantizer import QATQuantizer
+            from verl.utils.torch_dtypes import PrecisionType
+
+            mixed_precision_config = self.engine_config.mixed_precision
+            if mixed_precision_config is not None:
+                param_dtype = PrecisionType.to_dtype(mixed_precision_config.get("param_dtype", "bf16"))
+            else:
+                param_dtype = torch.bfloat16
+
+            quantizer = QATQuantizer(
+                mode=self._qat_config.mode,
+                group_size=self._qat_config.group_size,
+                ignore_patterns=list(self._qat_config.ignore_patterns),
+                device=torch.device(get_device_id()),
+                param_dtype=param_dtype,
+            )
+            per_tensor_param = quantizer.quantize_with_fusion(
+                per_tensor_param,
+                target_device=torch.device("cpu"),
+            )
+
         peft_config_dict = peft_config.to_dict() if peft_config is not None else None
         return per_tensor_param, peft_config_dict
 
@@ -894,11 +1010,12 @@ class FSDPEngineWithLMHead(FSDPEngine):
 
         return model_inputs, output_args
 
-    def prepare_model_outputs(self, output, output_args, micro_batch: TensorDict):
+    def prepare_model_outputs(self, output, output_args, micro_batch: TensorDict, logits_processor_func):
         use_remove_padding = tu.get_non_tensor_data(data=micro_batch, key="use_remove_padding", default=True)
         pad_mode = tu.get_non_tensor_data(data=micro_batch, key="pad_mode", default=DatasetPadMode.NO_PADDING)
         use_fused_kernels = tu.get_non_tensor_data(data=micro_batch, key="use_fused_kernels", default=False)
         calculate_entropy = tu.get_non_tensor_data(data=micro_batch, key="calculate_entropy", default=False)
+        distillation_use_topk = tu.get_non_tensor_data(data=micro_batch, key="distillation_use_topk", default=False)
 
         model_output = {}
 
@@ -934,6 +1051,18 @@ class FSDPEngineWithLMHead(FSDPEngine):
                         entropy_rmpad = torch.utils.checkpoint.checkpoint(
                             self.compute_entropy_from_logits, logits_rmpad
                         )
+
+                # logits_processor_func return tensors with shape (1, total_nnz/sp_size)
+                if distillation_use_topk:
+                    outputs = logits_processor_func(student_logits=logits_rmpad.unsqueeze(0), data=micro_batch)
+                    cu_seqlens = input_ids.offsets()
+                    for k, v in outputs.items():
+                        v = v.squeeze(0)
+                        assert v.shape == log_probs.shape, f"log_probs shape: {log_probs.shape}, {k} shape: {v.shape}"
+                        if self.use_ulysses_sp:
+                            pad_size = output_args["pad_size"]
+                            v = gather_outputs_and_unpad(v, gather_dim=0, unpad_dim=0, padding_size=pad_size)
+                        model_output[k] = torch.nested.nested_tensor_from_jagged(v, cu_seqlens)
 
             # gather log_prob if sp > 1
             if self.use_ulysses_sp:
@@ -1017,7 +1146,7 @@ class FSDPEngineWithLMHead(FSDPEngine):
             )  # prevent model thinks we are generating
 
             model_output = self.prepare_model_outputs(
-                output=raw_output, output_args=output_args, micro_batch=micro_batch
+                output=raw_output, output_args=output_args, micro_batch=micro_batch, logits_processor_func=loss_function
             )
 
             if loss_function is not None:
@@ -1044,7 +1173,7 @@ class FSDPEngineWithValueHead(FSDPEngineWithLMHead):
     The only difference between critic and actor is how the raw model output is processed
     """
 
-    def prepare_model_outputs(self, output, output_args, micro_batch: TensorDict):
+    def prepare_model_outputs(self, output, output_args, micro_batch: TensorDict, logits_processor_func):
         use_remove_padding = tu.get_non_tensor_data(data=micro_batch, key="use_remove_padding", default=True)
         pad_mode = tu.get_non_tensor_data(data=micro_batch, key="pad_mode", default=DatasetPadMode.NO_PADDING)
 
@@ -1052,7 +1181,7 @@ class FSDPEngineWithValueHead(FSDPEngineWithLMHead):
         if use_remove_padding:
             if hasattr(self.module, "v_head"):
                 # For trl.AutoModelForCausalLMWithValueHead
-                values_rmpad = output[2].squeeze(0).unsqueeze(-1)
+                values_rmpad = output[2].squeeze(0)
             else:
                 values_rmpad = output.logits
                 values_rmpad = values_rmpad.squeeze(0)  # (total_nnz, 1)
@@ -1077,7 +1206,7 @@ class FSDPEngineWithValueHead(FSDPEngineWithLMHead):
                 # For trl.AutoModelForCausalLMWithValueHead
                 values = output[2]
             else:
-                values = output.logits
+                values = output.logits.squeeze(-1)
 
             if pad_mode == DatasetPadMode.NO_PADDING:
                 cu_seqlens = input_ids.offsets()
