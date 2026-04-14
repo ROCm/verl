@@ -332,6 +332,12 @@ def is_support_ipc() -> bool:
     Returns:
         bool: True if IPC is supported, False otherwise.
     """
+    # ROCm (HIP) emulates the CUDA API so is_cuda_available is True on ROCm,
+    # but ROCm does not support CUDA IPC (reduce_tensor / cudaIpcGetMemHandle).
+    # Fall through to the False return so shared memory is used instead.
+    if is_rocm_available:
+        return False
+
     # If CUDA is available, it's a GPU device
     if is_cuda_available:
         return True
