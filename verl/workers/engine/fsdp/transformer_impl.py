@@ -45,6 +45,7 @@ from verl.utils.fsdp_utils import (
     MixedPrecisionPolicy,
     apply_fsdp2,
     collect_lora_params,
+    dtensor_full_tensor,
     fsdp2_clip_grad_norm_,
     fsdp2_load_full_state_dict,
     fsdp_version,
@@ -788,7 +789,7 @@ class FSDPEngine(BaseEngine):
             per_tensor_param = (
                 (
                     name,
-                    param.to(device, non_blocking=True).full_tensor().to(torch.bfloat16, non_blocking=True)
+                    dtensor_full_tensor(param, device).to(torch.bfloat16, non_blocking=True)
                     if isinstance(param, DTensor)
                     else param,
                 )

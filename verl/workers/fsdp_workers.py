@@ -66,6 +66,7 @@ from verl.utils.fsdp_utils import (
     apply_fsdp2,
     collect_lora_params,
     collect_merged_lora_params,
+    dtensor_full_tensor,
     fsdp2_load_full_state_dict,
     fsdp_version,
     get_fsdp_wrap_policy,
@@ -832,7 +833,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
         per_tensor_param = (
             (
                 name,
-                param.to(device, non_blocking=True).full_tensor()
+                dtensor_full_tensor(param, device)
                 if isinstance(param, DTensor)
                 else param.to(device, non_blocking=False),
             )
@@ -867,7 +868,7 @@ class ActorRolloutRefWorker(Worker, DistProfilerExtension):
             and not self.peft_merge
         ):
             per_tensor_base_params = (
-                (name, param.to(device, non_blocking=True).full_tensor() if isinstance(param, DTensor) else param)
+                (name, dtensor_full_tensor(param, device) if isinstance(param, DTensor) else param)
                 for name, param in base_model_params.items()
             )
             await self.rollout.update_weights(per_tensor_base_params, base_sync_done=False)

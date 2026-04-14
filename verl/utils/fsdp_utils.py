@@ -50,6 +50,25 @@ else:
     fully_shard, MixedPrecisionPolicy, FSDPModule, CPUOffloadPolicy, fully_shard_module = None, None, None, None, None
 
 
+def dtensor_full_tensor(param, device) -> torch.Tensor:
+    """Gather a sharded DTensor into a full tensor using dist.all_gather.
+
+    This is a drop-in replacement for ``DTensor.full_tensor()`` that avoids the
+    ``allgather_into_tensor_coalesced`` collective, which is not supported by
+    RCCL (ROCm).  ``torch.distributed.all_gather`` is supported on all backends.
+    """
+    from torch.distributed.tensor.placement_types import Shard as _Shard
+
+    local = param.to(device, non_blocking=False).to_local()
+    mesh = param.device_mesh
+    group = mesh.get_group()
+    world_size = dist.get_world_size(group)
+    gathered = [torch.empty_like(local) for _ in range(world_size)]
+    dist.all_gather(gathered, local.contiguous(), group=group)
+    shard_dim = next((p.dim for p in param.placements if isinstance(p, _Shard)), 0)
+    return torch.cat(gathered, dim=shard_dim)
+
+
 def init_fn(x: torch.nn.Module):
     if torch.distributed.get_rank() != 0:
         x = x.to_empty(device=get_device_id(), recurse=False)
