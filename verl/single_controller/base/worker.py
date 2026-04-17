@@ -233,25 +233,9 @@ class Worker(WorkerHelper):
 
         is_ray_noset_visible_devices = ray_noset_visible_devices()
 
-        # Prevent use of clashing `{CUDA/HIP/ROCR}_VISIBLE_DEVICES``
+        # Prevent use of clashing `{CUDA/ROCR}_VISIBLE_DEVICES``
         rocr_val = os.environ.get("ROCR_VISIBLE_DEVICES", None)
-        hip_val = os.environ.get("HIP_VISIBLE_DEVICES", None)
         cuda_val = os.environ.get("CUDA_VISIBLE_DEVICES", None)
-        if hip_val:
-            # Switch the use of HIP_VISIBLE_DEVICES to CUDA_VISIBLE_DEVICES for consistency.
-            # Make sure that the HIP_VISIBLE_DEVICES is set to the same value as CUDA_VISIBLE_DEVICES
-            # at this point.
-            val = os.environ.pop("HIP_VISIBLE_DEVICES")
-            hip_val = None
-            if cuda_val:
-                assert val == cuda_val, (
-                    f"Please use the same HIP_VISIBLE_DEVICES or CUDA_VISIBLE_DEVICES, inconsistant values "
-                    f"found: {val} and {cuda_val}."
-                )
-            else:
-                cuda_val = val
-                os.environ["CUDA_VISIBLE_DEVICES"] = val
-                # os.environ["HIP_VISIBLE_DEVICES"] = val
 
         if rocr_val:
             # You must take care if both HIP/CUDA and ROCR env vars are set as they have
