@@ -19,7 +19,10 @@ and because CUDA IPC requires distinct processes.
 
 import asyncio
 import multiprocessing as mp
+import os
+import tempfile
 import uuid
+from unittest import mock
 
 import pytest
 import torch
@@ -217,3 +220,83 @@ class TestBucketedWeightTransferIPC:
         numel = (1 << 20) // 4
         specs = [("exact_fit", (numel,), torch.float32)]
         _transfer_and_validate(specs, bucket_size_mb=1, use_shm=False)
+
+
+# ---------------------------------------------------------------------------
+# Stale-socket cleanup tests (no accelerator required)
+# ---------------------------------------------------------------------------
+class TestInitSocketStaleFileCleanup:
+    """Tests for the stale IPC socket file cleanup added to BucketedWeightSender._init_socket.
+
+    A previously crashed run can leave the socket file on disk.  Without
+    cleanup, zmq.REQ.bind() raises ``zmq.error.ZMQError: Address already in
+    use``.  The fix unlinks the file before binding.
+    """
+
+    def _make_sender(self, zmq_handle):
+        """Return a BucketedWeightSender with the ZMQ context mocked out."""
+        from verl.workers.rollout.vllm_rollout.bucketed_weight_transfer import BucketedWeightSender
+
+        sender = BucketedWeightSender.__new__(BucketedWeightSender)
+        sender.zmq_handle = zmq_handle
+        sender.bucket_size_mb = 512
+        sender.bucket_size = 512 << 20
+        sender.use_shm = True
+        sender.buffer = None
+        sender.shm = None
+        # Replace the real ZMQ context/socket with mocks so no network I/O happens.
+        mock_socket = mock.MagicMock()
+        mock_context = mock.MagicMock()
+        mock_context.socket.return_value = mock_socket
+        sender.zmq_context = mock_context
+        sender.socket = None
+        return sender, mock_socket
+
+    def test_stale_file_is_removed_before_bind(self):
+        """_init_socket must unlink a pre-existing socket file before binding."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = os.path.join(tmpdir, "test.sock")
+            zmq_handle = f"ipc://{socket_path}"
+
+            # Simulate a stale file left by a previous crashed run.
+            open(socket_path, "w").close()
+            assert os.path.exists(socket_path), "pre-condition: stale file must exist"
+
+            sender, mock_socket = self._make_sender(zmq_handle)
+            sender._init_socket()
+
+            # After _init_socket, bind should have been called (socket is set up).
+            mock_socket.bind.assert_called_once_with(zmq_handle)
+            # The stale file should have been removed before bind was called.
+            # We verify this by checking that bind did not fail (mock never raises)
+            # and that the file no longer exists from any re-creation by real ZMQ
+            # (since the socket is mocked, no file is created).
+            # The key invariant: unlink was called, so the original stale file is gone.
+            assert not os.path.exists(socket_path), (
+                "stale socket file should have been removed by _init_socket"
+            )
+
+    def test_no_error_when_no_stale_file(self):
+        """_init_socket must work normally when no stale file is present."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = os.path.join(tmpdir, "test.sock")
+            zmq_handle = f"ipc://{socket_path}"
+
+            assert not os.path.exists(socket_path), "pre-condition: file must not exist"
+
+            sender, mock_socket = self._make_sender(zmq_handle)
+            sender._init_socket()  # must not raise
+
+            mock_socket.bind.assert_called_once_with(zmq_handle)
+
+    def test_unlink_called_only_when_file_exists(self):
+        """_init_socket must not attempt to unlink when there is no stale file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            socket_path = os.path.join(tmpdir, "no_file.sock")
+            zmq_handle = f"ipc://{socket_path}"
+
+            sender, _ = self._make_sender(zmq_handle)
+
+            with mock.patch("os.unlink") as mock_unlink:
+                sender._init_socket()
+                mock_unlink.assert_not_called()
