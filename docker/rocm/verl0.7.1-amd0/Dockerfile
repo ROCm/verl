@@ -149,12 +149,22 @@ ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
 ARG VLLM_TAG="v0.18.2rc0"
 RUN mkdir /workspace
 COPY revert-cumem.patch /workspace/revert-cumem.patch
- 
+# vLLM PR #40390 (Aiter MoE re-uses existing tensor addresses after weight
+# update). The upstream squash-merge only landed on `main` after v0.18.2rc0
+# was tagged AND it was authored against an even older base, so neither
+# `git cherry-pick 2e777d21a` nor the raw `40390.patch` applies cleanly to
+# v0.18.2rc0. This file is the squashed change rebased onto v0.18.2rc0
+# with the `_setup_kernel` conflict resolved (using `self.kernel` and the
+# 3-arg `make_unquantized_moe_kernel` API present at this tag).
+COPY vllm-pr40390-aiter-moe-cudagraph.patch /workspace/vllm-pr40390-aiter-moe-cudagraph.patch
+
 RUN cd /workspace && pip install setuptools_scm && \
     ln -sf /opt/rocm/lib/libamdhip64.so /usr/lib/libamdhip64.so && \
     git clone https://github.com/vllm-project/vllm.git && \
     cd vllm && git checkout ${VLLM_TAG} && \
-    mv /workspace/revert-cumem.patch . && git apply revert-cumem.patch \
+    mv /workspace/revert-cumem.patch . && git apply revert-cumem.patch && \
+    mv /workspace/vllm-pr40390-aiter-moe-cudagraph.patch . && \
+    git apply vllm-pr40390-aiter-moe-cudagraph.patch && \
     pip install -r requirements/rocm.txt && \
     MAX_JOBS=32 python3 setup.py develop --no-deps
 
