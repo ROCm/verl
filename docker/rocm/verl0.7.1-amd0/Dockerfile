@@ -159,7 +159,7 @@ RUN cd /workspace && pip install setuptools_scm && \
     MAX_JOBS=32 python3 setup.py develop --no-deps
 
 FROM install_vllm AS install_verl
-RUN cd /workspace && git clone -b amd-integration https://github.com/ROCm/verl.git && \
+RUN cd /workspace && git clone -b amd-integration --recursive https://github.com/ROCm/verl.git && \
     cd verl && pip install -e .
 
 RUN pip install cupy-rocm-7-0
