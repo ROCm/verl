@@ -133,7 +133,7 @@ ENV NVTE_USE_CAST_TRANSPOSE_TRITON=0
 ENV NVTE_CK_USES_BWD_V3=1
 ENV NVTE_CK_V3_BF16_CVT=2
 
-ARG TE_TAG="dfb53ae26af387582d2f15d1c99ea202780b3dd7"
+ARG TE_TAG="386bd316"
 RUN pip install pybind11 && git clone https://github.com/ROCm/TransformerEngine.git && \
     cd TransformerEngine && git checkout ${TE_TAG} && git submodule update --init --recursive && \
     GPU_ARCHS=${GPU_ARCH} MAX_JOBS=$(nproc) python3 setup.py install && \
