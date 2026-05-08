@@ -41,6 +41,7 @@ FROM base AS rocm_deb
 
 ARG ROCM_VERSION=7.0.2
 ARG AMDGPU_VERSION=7.0.2
+ARG GFX_ARCH=gfx942|gfx950
 
 RUN curl -sL https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - \
     && printf "deb [arch=amd64] https://repo.radeon.com/rocm/apt/$ROCM_VERSION/ jammy main\n" | tee /etc/apt/sources.list.d/rocm.list \
@@ -64,7 +65,6 @@ ENV PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
 #
 FROM rocm_deb AS rocm_torch
 
-ARG GFX_ARCH=gfx942
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip "setuptools<80" wheel numpy einops ninja && \
@@ -80,7 +80,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip3 install *.whl && \
     rm -f *.whl
 
-ENV PYTORCH_ROCM_ARCH=${GFX_ARCH}
+ARG GPU_ARCH=gfx942;gfx950
+ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
 
 WORKDIR /root
 
@@ -94,18 +95,19 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 #
 FROM new_toolset AS fa_build
 
+ARG GPU_ARCH=gfx942;gfx950
 ARG FA_REPO="https://github.com/ROCm/flash-attention"
-ARG FA_TAG="8afc617aa7ebb72f70f659b03b9908c30920ad37"
+ARG FA_TAG="83f9e450cd10e20701fb109db9c7703d376f282b"
 
 RUN git clone ${FA_REPO} \
-&& cd flash-attention \
-&& git checkout ${FA_TAG} \
-&& git submodule init \
-&& git submodule update
+    && cd flash-attention \
+    && git checkout ${FA_TAG} \
+    && git submodule init \
+    && git submodule update
 
 RUN cd flash-attention \
-&& GPU_ARCHS=gfx942 BUILD_TARGET=rocm MAX_JOBS=$(nproc) python3 setup.py bdist_wheel \
-&& mkdir /install && cp dist/*.whl /install
+    && GPU_ARCHS=${GPU_ARCH} BUILD_TARGET=rocm MAX_JOBS=$(nproc) python3 setup.py bdist_wheel \
+    && mkdir /install && cp dist/*.whl /install
 
 #
 # Install Flash Attention
@@ -121,47 +123,50 @@ RUN --mount=type=bind,from=fa_build,source=/install,target=/tmp/install \
 #
 FROM install_fa AS te
 
+ARG GPU_ARCH=gfx942;gfx950
+
 ENV NVTE_USE_HIPBLASLT=1
 ENV NVTE_USE_ROCM=1
 ENV NVTE_FRAMEWORK=pytorch
-ENV NVTE_ROCM_ARCH=gfx942
+ENV NVTE_ROCM_ARCH=${GPU_ARCH}
 ENV NVTE_USE_CAST_TRANSPOSE_TRITON=0
 ENV NVTE_CK_USES_BWD_V3=1
 ENV NVTE_CK_V3_BF16_CVT=2
 
-ARG TE_TAG="307b5e86bb5960e347f1f70224d17e09e73f5338"
+ARG TE_TAG="dfb53ae26af387582d2f15d1c99ea202780b3dd7"
 RUN pip install pybind11 && git clone https://github.com/ROCm/TransformerEngine.git && \
-    cd TransformerEngine && git checkout $(TE_TAG) && git submodule update --init --recursive && \
-    GPU_ARCHS=gfx942 MAX_JOBS=$(nproc) python3 setup.py install && \
+    cd TransformerEngine && git checkout ${TE_TAG} && git submodule update --init --recursive && \
+    GPU_ARCHS=${GPU_ARCH} MAX_JOBS=$(nproc) python3 setup.py install && \
     cd .. && rm -rf TransformerEngine
 #
 # Install vllm
 #
 FROM te AS install_vllm
 
+ARG GPU_ARCH=gfx942;gfx950
 # waiting for upstream vllm update the patch
-ENV PYTORCH_ROCM_ARCH="gfx942"
-ARG VLLM_TAG="71161e8b63f9534d6ac5e098a4874621164d1f1e"
+ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
+ARG VLLM_TAG="v0.18.1rc1"
 RUN mkdir /workspace
 COPY 71161e8b6_patch.patch /workspace/71161e8b6_patch.patch
  
 RUN cd /workspace && pip install setuptools_scm && \
     ln -sf /opt/rocm/lib/libamdhip64.so /usr/lib/libamdhip64.so && \
     git clone https://github.com/vllm-project/vllm.git && \
-    cd vllm && git checkout $(VLLM_TAG) && \
+    cd vllm && git checkout ${VLLM_TAG} && \
     mv /workspace/71161e8b6_patch.patch . && git apply 71161e8b6_patch.patch \
     pip install -r requirements/rocm.txt && \
     MAX_JOBS=32 python3 setup.py develop --no-deps
 
 FROM install_vllm AS install_verl
 ARG VERL_TAG="e066848231f7ae3f32255e5e555ea239b9387890"
-RUN pip install cupy-rocm-7-0
 RUN cd /workspace && git clone -b amd-integration https://github.com/ROCm/verl.git && \
-    cd verl && git checkout $(VERL_TAG) && pip install -e .
+    cd verl && git checkout ${VERL_TAG} && pip install -e .
 
+RUN pip install cupy-rocm-7-0
 
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
 ARG AITER_TAG="f02877b8c29a9c3469af5ee0a400fffc14b805c9"
 RUN apt install vim -y
 RUN cd /workspace && git clone --recursive https://github.com/ROCm/aiter.git && cd aiter \
-    git checkout $(AITER_TAG) && python3 setup.py develop
+    git checkout ${AITER_TAG} && python3 setup.py develop
