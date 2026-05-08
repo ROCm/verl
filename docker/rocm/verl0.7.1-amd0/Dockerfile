@@ -146,7 +146,7 @@ FROM te AS install_vllm
 ARG GPU_ARCH=gfx942;gfx950
 # waiting for upstream vllm update the patch
 ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
-ARG VLLM_TAG="v0.18.1"
+ARG VLLM_TAG="v0.18.2"
 RUN mkdir /workspace
 COPY revert-cumem.patch /workspace/revert-cumem.patch
  
