@@ -148,13 +148,13 @@ ARG GPU_ARCH=gfx942;gfx950
 ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
 ARG VLLM_TAG="v0.18.1rc1"
 RUN mkdir /workspace
-COPY 71161e8b6_patch.patch /workspace/71161e8b6_patch.patch
+COPY revert-cumem.patch /workspace/revert-cumem.patch
  
 RUN cd /workspace && pip install setuptools_scm && \
     ln -sf /opt/rocm/lib/libamdhip64.so /usr/lib/libamdhip64.so && \
     git clone https://github.com/vllm-project/vllm.git && \
     cd vllm && git checkout ${VLLM_TAG} && \
-    mv /workspace/71161e8b6_patch.patch . && git apply 71161e8b6_patch.patch \
+    mv /workspace/revert-cumem.patch . && git apply revert-cumem.patch \
     pip install -r requirements/rocm.txt && \
     MAX_JOBS=32 python3 setup.py develop --no-deps
 
