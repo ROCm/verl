@@ -146,7 +146,7 @@ FROM te AS install_vllm
 ARG GPU_ARCH=gfx942;gfx950
 # waiting for upstream vllm update the patch
 ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
-ARG VLLM_TAG="v0.18.1rc1"
+ARG VLLM_TAG="v0.18.1"
 RUN mkdir /workspace
 COPY revert-cumem.patch /workspace/revert-cumem.patch
  
@@ -159,14 +159,13 @@ RUN cd /workspace && pip install setuptools_scm && \
     MAX_JOBS=32 python3 setup.py develop --no-deps
 
 FROM install_vllm AS install_verl
-ARG VERL_TAG="e066848231f7ae3f32255e5e555ea239b9387890"
 RUN cd /workspace && git clone -b amd-integration https://github.com/ROCm/verl.git && \
-    cd verl && git checkout ${VERL_TAG} && pip install -e .
+    cd verl && pip install -e .
 
 RUN pip install cupy-rocm-7-0
 
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
-ARG AITER_TAG="f02877b8c29a9c3469af5ee0a400fffc14b805c9"
+ARG AITER_TAG="d113c3fae151287e2d2f207b2e7023e7b85df9a7"
 RUN apt install vim -y
 RUN cd /workspace && git clone --recursive https://github.com/ROCm/aiter.git && cd aiter \
     git checkout ${AITER_TAG} && python3 setup.py develop
