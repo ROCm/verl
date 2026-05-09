@@ -138,6 +138,10 @@ RUN pip install pybind11 && git clone https://github.com/ROCm/TransformerEngine.
     cd TransformerEngine && git checkout ${TE_TAG} && git submodule update --init --recursive && \
     GPU_ARCHS=${GPU_ARCH} MAX_JOBS=$(nproc) python3 setup.py install && \
     cd .. && rm -rf TransformerEngine
+# TE patch
+RUN FILE=$(find /usr/local/lib/python3.12/dist-packages/ -path "*transformer_engine*/transformer_engine/pytorch/attention/dot_product_attention/utils.py") && \
+    sed -i '121s/2\.8\.3/2.8.4/' "$FILE"
+
 #
 # Install vllm
 #
