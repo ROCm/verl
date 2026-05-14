@@ -1,0 +1,24 @@
+--- a/torch/_inductor/runtime/triton_heuristics.py	2026-05-14 18:35:33.082354311 +0000
++++ b/torch/_inductor/runtime/triton_heuristics.py	2026-05-14 15:51:38.562723963 +0000
+@@ -1750,11 +1750,19 @@
+             "cta_args": (
+                 (
+                     binary.num_ctas,
+-                    *get_first_attr(binary, "cluster_dims", "clusterDims"),
++                    *(
++                        get_first_attr(binary, "cluster_dims", "clusterDims")
++                        if hasattr(binary, "cluster_dims")
++                        or hasattr(binary, "clusterDims")
++                        else (1, 1, 1)
++                    ),
+                 )
+                 if hasattr(binary, "num_ctas")
+                 else (
+-                    (binary.metadata.num_ctas, *binary.metadata.cluster_dims)
++                    (
++                        binary.metadata.num_ctas,
++                        *getattr(binary.metadata, "cluster_dims", (1, 1, 1)),
++                    )
+                     if hasattr(binary, "metadata")
+                     else ()
+                 )

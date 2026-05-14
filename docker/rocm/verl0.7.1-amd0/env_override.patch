@@ -1,0 +1,25 @@
+diff --git a/vllm/env_override.py b/vllm/env_override.py
+index 432300f4c..288e071a4 100644
+--- a/vllm/env_override.py
++++ b/vllm/env_override.py
+@@ -504,10 +504,17 @@ if not is_torch_equal_or_newer("2.12.0"):
+     import builtins as _builtins
+     import pickle
+ 
+-    from torch._dynamo.convert_frame import GraphCaptureOutput
+-
++    try:
++        from torch._dynamo.convert_frame import GraphCaptureOutput
++    except ImportError:
++        # Older torch versions (e.g. 2.9.x) don't have GraphCaptureOutput or the
++        # corresponding get_runtime_env / external_refs / used_globals
++        # infrastructure that this patch targets, so there's nothing to patch.
++        GraphCaptureOutput = None  # type: ignore[assignment,misc]
++
++if not is_torch_equal_or_newer("2.12.0") and GraphCaptureOutput is not None:
+     _original_get_runtime_env = GraphCaptureOutput.get_runtime_env
+-
++    
+     def _safe_builtins_dict(builtins_dict: dict) -> dict:
+         """Filter a builtins dict to only picklable entries for serialization."""
+         result = {}
