@@ -152,7 +152,9 @@ ARG GPU_ARCH=gfx942;gfx950
 ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
 ARG VLLM_TAG="v0.18.2rc0"
 RUN mkdir /workspace
+COPY triton_heuristics.patch /workspace/triton_heuristics.patch
 COPY revert-cumem.patch /workspace/revert-cumem.patch
+COPY env_override.patch /workspace/env_override.patch
 # vLLM PR #40390 (Aiter MoE re-uses existing tensor addresses after weight
 # update). The upstream squash-merge only landed on `main` after v0.18.2rc0
 # was tagged AND it was authored against an even older base, so neither
@@ -166,6 +168,7 @@ RUN cd /workspace && pip install setuptools_scm && \
     ln -sf /opt/rocm/lib/libamdhip64.so /usr/lib/libamdhip64.so && \
     git clone https://github.com/vllm-project/vllm.git && \
     cd vllm && git checkout ${VLLM_TAG} && \
+    mv /workspace/env_override.patch . && git apply env_override.patch && \
     mv /workspace/revert-cumem.patch . && git apply revert-cumem.patch && \
     mv /workspace/vllm-pr40390-aiter-moe-cudagraph.patch . && \
     git apply vllm-pr40390-aiter-moe-cudagraph.patch && \
@@ -183,3 +186,5 @@ ARG AITER_TAG="d113c3fae151287e2d2f207b2e7023e7b85df9a7"
 RUN apt install vim -y
 RUN cd /workspace && git clone --recursive https://github.com/ROCm/aiter.git && cd aiter \
     git checkout ${AITER_TAG} && python3 setup.py develop
+
+RUN patch -p1 /usr/local/lib/python3.12/dist-packages/torch/_inductor/runtime/triton_heuristics.py < /workspace/triton_heuristics.patch
