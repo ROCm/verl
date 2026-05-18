@@ -18,7 +18,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
     if ! python3 --version | grep -q ${PYTHON_VERSION} ; then \
     add-apt-repository -y ppa:deadsnakes/ppa && apt update && \
     apt-get install -y python${PYTHON_VERSION} python${PYTHON_VERSION}-dev python${PYTHON_VERSION}-venv \
-                    python${PYTHON_VERSION}-lib2to3 python-is-python3 ; fi
+                       python${PYTHON_VERSION}-lib2to3 python-is-python3 ; fi
 
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 && \
     update-alternatives --set python3 /usr/bin/python${PYTHON_VERSION} && \
@@ -95,19 +95,18 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 #
 FROM new_toolset AS fa_build
 
-ARG GPU_ARCH=gfx942;gfx950
 ARG FA_REPO="https://github.com/ROCm/flash-attention"
 ARG FA_TAG="83f9e450cd10e20701fb109db9c7703d376f282b"
 
 RUN git clone ${FA_REPO} \
-    && cd flash-attention \
-    && git checkout ${FA_TAG} \
-    && git submodule init \
-    && git submodule update
+ && cd flash-attention \
+ && git checkout ${FA_TAG} \
+ && git submodule init \
+ && git submodule update
 
 RUN cd flash-attention \
-    && GPU_ARCHS=${GPU_ARCH} BUILD_TARGET=rocm MAX_JOBS=$(nproc) python3 setup.py bdist_wheel \
-    && mkdir /install && cp dist/*.whl /install
+ && GPU_ARCHS=${GPU_ARCH} BUILD_TARGET=rocm MAX_JOBS=$(nproc) python3 setup.py bdist_wheel \
+ && mkdir /install && cp dist/*.whl /install
 
 #
 # Install Flash Attention
@@ -123,8 +122,6 @@ RUN --mount=type=bind,from=fa_build,source=/install,target=/tmp/install \
 #
 FROM install_fa AS te
 
-ARG GPU_ARCH=gfx942;gfx950
-
 ENV NVTE_USE_HIPBLASLT=1
 ENV NVTE_USE_ROCM=1
 ENV NVTE_FRAMEWORK=pytorch
@@ -136,50 +133,41 @@ ENV NVTE_CK_V3_BF16_CVT=2
 ARG TE_TAG="386bd316"
 RUN pip install pybind11 && git clone https://github.com/ROCm/TransformerEngine.git && \
     cd TransformerEngine && git checkout ${TE_TAG} && git submodule update --init --recursive && \
-    GPU_ARCHS=${GPU_ARCH} MAX_JOBS=$(nproc) python3 setup.py install && \
+    GPU_ARCHS=${GPU_ARCH} MAX_JOBS=256 python3 setup.py install && \
     cd .. && rm -rf TransformerEngine
 # TE patch
 RUN FILE=$(find /usr/local/lib/python3.12/dist-packages/ -path "*transformer_engine*/transformer_engine/pytorch/attention/dot_product_attention/utils.py") && \
     sed -i '121s/2\.8\.3/2.8.4/' "$FILE"
-
 #
 # Install vllm
 #
 FROM te AS install_vllm
 
-ARG GPU_ARCH=gfx942;gfx950
-# waiting for upstream vllm update the patch
-ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
-ARG VLLM_TAG="v0.18.2rc0"
-RUN mkdir /workspace
-COPY revert-cumem.patch /workspace/revert-cumem.patch
-# vLLM PR #40390 (Aiter MoE re-uses existing tensor addresses after weight
-# update). The upstream squash-merge only landed on `main` after v0.18.2rc0
-# was tagged AND it was authored against an even older base, so neither
-# `git cherry-pick 2e777d21a` nor the raw `40390.patch` applies cleanly to
-# v0.18.2rc0. This file is the squashed change rebased onto v0.18.2rc0
-# with the `_setup_kernel` conflict resolved (using `self.kernel` and the
-# 3-arg `make_unquantized_moe_kernel` API present at this tag).
-COPY vllm-pr40390-aiter-moe-cudagraph.patch /workspace/vllm-pr40390-aiter-moe-cudagraph.patch
-
-RUN cd /workspace && pip install setuptools_scm && \
+ARG VLLM_TAG="1ff9d3353"
+RUN pip install setuptools_scm && \
+    mkdir /workspace && cd /workspace && \
     ln -sf /opt/rocm/lib/libamdhip64.so /usr/lib/libamdhip64.so && \
-    git clone https://github.com/vllm-project/vllm.git && \
-    cd vllm && git checkout ${VLLM_TAG} && \
-    mv /workspace/revert-cumem.patch . && git apply revert-cumem.patch && \
-    mv /workspace/vllm-pr40390-aiter-moe-cudagraph.patch . && \
-    git apply vllm-pr40390-aiter-moe-cudagraph.patch && \
-    pip install -r requirements/rocm.txt && \
-    MAX_JOBS=32 python3 setup.py develop --no-deps
+    git clone https://github.com/vllm-project/vllm && \
+    cd vllm && git checkout ${VLLM_TAG} && pip install -r requirements/rocm.txt && \
+    MAX_JOBS=64 python3 setup.py develop --no-deps
+RUN pip uninstall tilelang -y && pip install xgrammar==0.1.32
+
+RUN apt-get update && apt install vim -y
 
 FROM install_vllm AS install_verl
-RUN cd /workspace && git clone -b amd-integration --recursive https://github.com/ROCm/verl.git && \
+RUN cd /workspace && git clone --recursive -b amd-integration https://github.com/ROCm/verl.git && \
     cd verl && pip install -e .
-
 RUN pip install cupy-rocm-7-0
 
+
 ENV MIOPEN_DEBUG_CONV_DIRECT=0
-ARG AITER_TAG="d113c3fae151287e2d2f207b2e7023e7b85df9a7"
-RUN apt install vim -y
-RUN cd /workspace && git clone --recursive https://github.com/ROCm/aiter.git && cd aiter \
-    git checkout ${AITER_TAG} && python3 setup.py develop
+ARG AITER_TAG="45c428e54"
+RUN cd /workspace && git clone --recursive https://github.com/ROCm/aiter.git && cd aiter && git checkout ${AITER_TAG} && python3 setup.py develop
+
+# for qwen3.5
+RUN pip install -U git+https://github.com/ISEEKYAN/mbridge.git && \
+    pip install transformers --upgrade && \
+    pip install megatron-core==0.16.0 && \
+    pip install mathruler && \
+    pip install qwen_vl_utils && \
+    pip install flash-linear-attention
